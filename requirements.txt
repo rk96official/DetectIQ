@@ -1,0 +1,17 @@
+streamlit
+numpy
+pandas
+matplotlib
+scikit-learn
+tensorflow
+nltk
+transformers
+torch
+accelerate
+openpyxl
+python-docx
+pdfplumber
+PyPDF2
+scipy
+sentencepiece
+torchvision
