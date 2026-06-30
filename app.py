@@ -205,7 +205,6 @@ LING_FEATURE_NAMES = [
     "Hapax legomena ratio", "Avg sentence length (chars)", "Total word count",
 ]
 
-
 def compute_text_stats(text: str) -> dict:
     sentences    = sent_tokenize(text)
     words        = word_tokenize(text)
