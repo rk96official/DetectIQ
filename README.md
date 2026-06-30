@@ -4,9 +4,7 @@ emoji: 🚀
 colorFrom: blue
 colorTo: green
 sdk: docker
-app_port: 8501
-pinned: false
-HF Spaces: [DetectIQ] (https://huggingface.co/spaces/thelege9d/DetectIQ)
+Live Demo: [DetectIQ on Hugging Face Spaces](https://huggingface.co/spaces/thelege9d/DetectIQ)
 ---
 
 # DetectIQ: AI vs Human Text Detection
