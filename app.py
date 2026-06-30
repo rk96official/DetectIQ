@@ -747,7 +747,6 @@ def reset_page_state():
         st.session_state.pop(k, None)
     st.session_state["pp_nonce"] = st.session_state.get("pp_nonce", 0) + 1
     st.session_state["cp_nonce"] = st.session_state.get("cp_nonce", 0) + 1
-    # Clear the hand-off seeds so a direct visit opens an empty box.
     st.session_state["pp_prefill"] = ""
     st.session_state["cp_prefill"] = ""
 
@@ -1057,10 +1056,6 @@ def main():
         auto = st.session_state.pop("auto_run", False)
         st.session_state.setdefault("pp_nonce", 0)
         if auto:
-            # Re-mount the box under a fresh key and bake the handed-off text in
-            # via value=. On a rerun-driven page switch, setting session_state
-            # before the widget updates only the server value, not the text the
-            # browser renders — value= on a brand-new key is what actually shows.
             st.session_state["pp_nonce"]  += 1
             st.session_state["pp_prefill"] = st.session_state.get("shared_text", "")
             st.session_state["pp_model"]   = st.session_state.get("sel_model", available_models[0])
@@ -1068,9 +1063,6 @@ def main():
 
         pp_key = f"pp_text_{st.session_state['pp_nonce']}"
         with st.container(border=True, key="pagebox"):
-            # value= seeds the handed-off text on a fresh mount (a new key each
-            # navigation); on later reruns the live widget state wins, so typing
-            # is preserved.
             text = st.text_area("input", height=320, key=pp_key,
                                 value=st.session_state.get("pp_prefill", ""),
                                 label_visibility="collapsed",
@@ -1111,8 +1103,6 @@ def main():
         auto = st.session_state.pop("auto_run", False)
         st.session_state.setdefault("cp_nonce", 0)
         if auto:
-            # Fresh key + value= (see page_predict for why session_state-set
-            # alone leaves the browser box empty on a rerun-driven page switch).
             st.session_state["cp_nonce"]  += 1
             st.session_state["cp_prefill"] = st.session_state.get("shared_text", "")
             st.session_state["cp_llm"]     = st.session_state.get("use_llm", True)
