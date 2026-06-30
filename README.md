@@ -1,14 +1,11 @@
 ---
 title: DetectIQ
-emoji: 🏃
-colorFrom: indigo
+emoji: 🚀
+colorFrom: blue
 colorTo: green
-sdk: streamlit
-sdk_version: 1.25.0
-app_file: app.py
+sdk: docker
+app_port: 8501
 pinned: false
-license: mit
-short_description: AI vs Human Text Detector
 ---
 
 # DetectIQ: AI vs Human Text Detection

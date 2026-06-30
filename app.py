@@ -1,4 +1,9 @@
-import os, re, string, pickle, json, io, warnings
+import os
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "-1")
+
+import re, string, pickle, json, io, warnings
 warnings.filterwarnings("ignore")
 
 import numpy as np
@@ -241,45 +246,36 @@ def extract_text_from_docx(file) -> str:
         return f"[DOCX extraction failed: {e}]"
 
 
-@st.cache_resource(show_spinner="Loading LLMs.....")
-def load_llms():
+@st.cache_resource(show_spinner=False)
+def load_single_llm(model_id: str, max_new_tokens: int):
     from transformers import pipeline
     import torch
 
     if torch.cuda.is_available():
-        device_kwargs = dict(torch_dtype=torch.float16, device_map="auto")
-    else:
-        device_kwargs = dict(torch_dtype=torch.float32, device="cpu")
-    errors = []
-
-    # prediction explanation model
-    try:
-        llm1 = pipeline(
+        return pipeline(
             "text-generation",
-            model="Qwen/Qwen2.5-1.5B-Instruct",
-            max_new_tokens=300,
+            model=model_id,
+            torch_dtype=torch.float16,
+            device_map="auto",
+            max_new_tokens=max_new_tokens,
             do_sample=False,
-            **device_kwargs,
         )
-    except Exception as e:
-        llm1 = None
-        errors.append(f"LLM 1 (Qwen2.5-1.5B-Instruct): {e}")
 
-    # style analysis model
-    try:
-        llm2 = pipeline(
-            "text-generation",
-            model="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-            max_new_tokens=280,
-            do_sample=False,
-            **device_kwargs,
-        )
-    except Exception as e:
-        llm2 = None
-        errors.append(f"LLM 2 (TinyLlama-1.1B-Chat): {e}")
+    return pipeline(
+        "text-generation",
+        model=model_id,
+        device=-1,
+        max_new_tokens=max_new_tokens,
+        do_sample=False,
+    )
 
-    return llm1, llm2, errors
 
+def get_llm1():
+    return load_single_llm("Qwen/Qwen2.5-1.5B-Instruct", 300)
+
+
+def get_llm2():
+    return load_single_llm("TinyLlama/TinyLlama-1.1B-Chat-v1.0", 280)
 
 def stream_llm(llm, prompt: str, max_new_tokens: int = 300):
     if llm is None:
@@ -423,7 +419,7 @@ def load_ml_models():
         for key, fname in [("FNN","fnn_model.h5"),("LSTM","lstm_model.h5"),("CNN","cnn_model.h5")]:
             path = os.path.join(MODELS_DIR, fname)
             if os.path.exists(path):
-                loaded[key] = tf.keras.models.load_model(path)
+                loaded[key] = tf.keras.models.load_model(path, compile=False)
             else:
                 errors.append(f"{fname} not found")
     except Exception as e:
@@ -771,7 +767,7 @@ def render_top_nav(active: str):
 
 def main():
     ml_models, ml_errors = load_ml_models()
-    llm1, llm2, llm_errors = load_llms()
+    llm_errors = []
 
     available_models = [m for m in
         ["SVM", "Decision Tree", "AdaBoost", "FNN", "LSTM", "CNN"]
@@ -780,12 +776,7 @@ def main():
     st.session_state.setdefault("page", "home")
 
     def llm_caption():
-        if llm1 and llm2:
-            st.caption("🟢 LLMs ready · Qwen2.5-1.5B + TinyLlama-1.1B")
-        elif llm1 or llm2:
-            st.caption("🟡 One LLM available — analysis will be partial")
-        else:
-            st.caption("🔴 LLMs unavailable — ML predictions still work")
+        st.caption("🟡 LLMs enabled · models load when analysis runs")
 
     def run_predict(text, model_name, use_llm):
         pred = predict(text, model_name, ml_models)
@@ -829,16 +820,18 @@ def main():
                             unsafe_allow_html=True)
                         if r["llm_done"]:
                             st.markdown(r["explanation"])
-                        elif llm1 is None:
-                            r["explanation"] = "LLM 1 unavailable."
-                            st.info(r["explanation"])
                         else:
                             prompt = build_explain_prompt(
                                 r["text"], pred["label_str"], pred["confidence"],
                                 get_top_features(pred))
-                            r["explanation"] = stream_with_spinner(
-                                stream_llm(llm1, prompt, 300),
-                                "LLM 1 is thinking…")
+                            try:
+                                llm1 = get_llm1()
+                                r["explanation"] = stream_with_spinner(
+                                    stream_llm(llm1, prompt, 300),
+                                    "LLM 1 is thinking…")
+                            except Exception as e:
+                                r["explanation"] = f"LLM 1 unavailable: {e}"
+                                st.info(r["explanation"])
                 with c2:
                     with st.container(border=True):
                         st.markdown(
@@ -848,14 +841,16 @@ def main():
                             unsafe_allow_html=True)
                         if r["llm_done"]:
                             st.markdown(r["style"])
-                        elif llm2 is None:
-                            r["style"] = "LLM 2 unavailable."
-                            st.info(r["style"])
                         else:
                             prompt = build_style_prompt(r["text"], r["stats"])
-                            r["style"] = stream_with_spinner(
-                                stream_llm(llm2, prompt, 280),
-                                "LLM 2 is thinking…")
+                            try:
+                                llm2 = get_llm2()
+                                r["style"] = stream_with_spinner(
+                                    stream_llm(llm2, prompt, 280),
+                                    "LLM 2 is thinking…")
+                            except Exception as e:
+                                r["style"] = f"LLM 2 unavailable: {e}"
+                                st.info(r["style"])
                 r["llm_done"] = True
 
         report = generate_report(r["text"], pred, r["model_name"], stats,
@@ -911,7 +906,7 @@ def main():
 
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-        if r["use_llm"] and (llm1 is not None or llm2 is not None):
+        if r["use_llm"]:
             st.markdown("")
             lc1, lc2 = st.columns(2)
             with lc1:
@@ -923,16 +918,18 @@ def main():
                         unsafe_allow_html=True)
                     if r["summary_done"]:
                         st.markdown(r["summary"])
-                    elif llm1 is None:
-                        r["summary"] = "LLM 1 unavailable."
-                        st.info(r["summary"])
                     else:
                         prompt = build_consensus_prompt(
                             r["text"], rows, r["ai_votes"], r["human_votes"])
-                        r["summary"] = stream_with_spinner(
-                            stream_llm(llm1, prompt, 300),
-                            "LLM 1 is summarizing the six models…")
-                        r["summary_done"] = True
+                        try:
+                            llm1 = get_llm1()
+                            r["summary"] = stream_with_spinner(
+                                stream_llm(llm1, prompt, 300),
+                                "LLM 1 is summarizing the six models…")
+                            r["summary_done"] = True
+                        except Exception as e:
+                            r["summary"] = f"LLM 1 unavailable: {e}"
+                            st.info(r["summary"])
             with lc2:
                 with st.container(border=True):
                     st.markdown(
@@ -942,15 +939,17 @@ def main():
                         'vocabulary</div>', unsafe_allow_html=True)
                     if r["style_done"]:
                         st.markdown(r["style"])
-                    elif llm2 is None:
-                        r["style"] = "LLM 2 unavailable."
-                        st.info(r["style"])
                     else:
                         prompt = build_style_prompt(r["text"], r["stats"])
-                        r["style"] = stream_with_spinner(
-                            stream_llm(llm2, prompt, 280),
-                            "LLM 2 is analyzing writing style…")
-                        r["style_done"] = True
+                        try:
+                            llm2 = get_llm2()
+                            r["style"] = stream_with_spinner(
+                                stream_llm(llm2, prompt, 280),
+                                "LLM 2 is analyzing writing style…")
+                            r["style_done"] = True
+                        except Exception as e:
+                            r["style"] = f"LLM 2 unavailable: {e}"
+                            st.info(r["style"])
         elif r["use_llm"]:
             st.info("LLMs unavailable — summaries skipped.")
 
