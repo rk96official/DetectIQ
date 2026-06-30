@@ -744,7 +744,8 @@ def read_uploaded(file) -> str:
 
 def reset_page_state():
     for k in ("predict_result", "compare_result", "auto_run",
-              "pp_text", "cp_text", "pp_file", "cp_file"):
+              "pp_text", "cp_text", "pp_file", "cp_file",
+              "pp_seed", "cp_seed", "pp_user_typed", "cp_user_typed"):
         st.session_state.pop(k, None)
 
 
@@ -1052,13 +1053,17 @@ def main():
 
         auto = st.session_state.pop("auto_run", False)
         if auto:
-            st.session_state["pp_text"]  = st.session_state.get("shared_text", "")
-            st.session_state["pp_model"] = st.session_state.get("sel_model", available_models[0])
-            st.session_state["pp_llm"]   = st.session_state.get("use_llm", True)
+            st.session_state["pp_seed"]       = st.session_state.get("shared_text", "")
+            st.session_state["pp_user_typed"] = False
+            st.session_state["pp_model"]      = st.session_state.get("sel_model", available_models[0])
+            st.session_state["pp_llm"]        = st.session_state.get("use_llm", True)
+        if "pp_seed" in st.session_state and not st.session_state.get("pp_user_typed"):
+            st.session_state["pp_text"] = st.session_state["pp_seed"]
 
         with st.container(border=True, key="pagebox"):
             text = st.text_area("input", height=320, key="pp_text",
                                 label_visibility="collapsed",
+                                on_change=lambda: st.session_state.update(pp_user_typed=True),
                                 placeholder="Paste any text — essay, article, email…")
             up = st.file_uploader("📎 Upload PDF / Word / TXT",
                                   type=["pdf", "docx", "txt"], key="pp_file")
@@ -1095,12 +1100,16 @@ def main():
 
         auto = st.session_state.pop("auto_run", False)
         if auto:
-            st.session_state["cp_text"] = st.session_state.get("shared_text", "")
-            st.session_state["cp_llm"]  = st.session_state.get("use_llm", True)
+            st.session_state["cp_seed"]       = st.session_state.get("shared_text", "")
+            st.session_state["cp_user_typed"] = False
+            st.session_state["cp_llm"]        = st.session_state.get("use_llm", True)
+        if "cp_seed" in st.session_state and not st.session_state.get("cp_user_typed"):
+            st.session_state["cp_text"] = st.session_state["cp_seed"]
 
         with st.container(border=True, key="pagebox"):
             text = st.text_area("input", height=320, key="cp_text",
                                 label_visibility="collapsed",
+                                on_change=lambda: st.session_state.update(cp_user_typed=True),
                                 placeholder="Paste text to run through all six models…")
             up = st.file_uploader("📎 Upload PDF / Word / TXT",
                                   type=["pdf", "docx", "txt"], key="cp_file")
